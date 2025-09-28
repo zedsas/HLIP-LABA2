@@ -1,0 +1,2 @@
+#!/bin/bash
+java -cp "app.jar;libs/kotlin-stdlib.jar;libs/kotlin-reflect-1.7.10.jar;libs/kotlinx-cli-jvm-0.3.6.jar" AppKt "$@"
