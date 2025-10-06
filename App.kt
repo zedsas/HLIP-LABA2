@@ -1,11 +1,5 @@
 import kotlinx.cli.*
-import java.security.MessageDigest
-import java.nio.charset.StandardCharsets
 import kotlin.system.exitProcess
-
-enum class Operation { READ, WRITE, EXECUTE }
-
-data class Account(val salt: String, val hash: String)
 
 val accounts = mapOf(
     "player" to Account(
@@ -14,55 +8,7 @@ val accounts = mapOf(
     )
 )
 
-class Node(
-    val id: String,
-    val capacity: Int = 10,
-    val ancestor: Node? = null
-) {
-    private val subNodes = mutableMapOf<String, Node>()
-    private val accessRules = mutableMapOf<String, MutableSet<Operation>>()
-
-    fun attach(node: Node) {
-        subNodes[node.id] = node
-    }
-
-    fun retrieve(id: String): Node? = subNodes[id]
-
-    fun locate(path: String): Node? {
-        if (path.isEmpty()) return null
-        val segments = path.split(".")
-        for (segment in segments) {
-            if (!isValidIdentifier(segment)) {
-                return null
-            }
-        }
-        var current: Node? = this
-        for (segment in segments) {
-            current = current?.retrieve(segment) ?: return null
-        }
-        return current
-    }
-
-    fun allow(user: String, op: Operation) {
-        accessRules.computeIfAbsent(user) { mutableSetOf() }.add(op)
-    }
-
-    fun permitted(user: String, op: Operation): Boolean {
-        val userOps = accessRules[user]
-        return if (userOps != null && op in userOps) {
-            true
-        } else {
-            ancestor?.permitted(user, op) ?: false
-        }
-    }
-
-    companion object {
-        fun isValidIdentifier(name: String): Boolean {
-            if (name.isEmpty() || name.length > 20) return false
-            return name.all { it.isLetterOrDigit() || it == '_' }
-        }
-    }
-}
+data class Account(val salt: String, val hash: String)
 
 fun main(args: Array<String>) {
     val parser = ArgParser("resource-access")
@@ -138,7 +84,7 @@ fun main(args: Array<String>) {
     val resourceValue = path
     val volumeValueStr = amount
 
-    if (resourceValue.split(".").any { !Node.isValidIdentifier(it) }) {
+    if (resourceValue.split(".").any { !ResourceNode.isValidIdentifier(it) }) {
         exitProcess(7)
     }
 
@@ -150,18 +96,21 @@ fun main(args: Array<String>) {
         exitProcess(2)
     }
 
-    val root = Node("system", 100)
-    val level1 = Node("data", 50, root)
-    val level2 = Node("logs", 20, level1)
-    val leaf = Node("config", 10, level2)
+    // Создаём дерево ресурсов
+    val root = ResourceNode("system", 100)
+    val level1 = ResourceNode("data", 50, root)
+    val level2 = ResourceNode("logs", 20, level1)
+    val leaf = ResourceNode("config", 10, level2)
 
-    root.attach(level1)
-    level1.attach(level2)
-    level2.attach(leaf)
+    root.addChild(level1)
+    level1.addChild(level2)
+    level2.addChild(leaf)
 
-    level1.allow("player", Operation.READ)
-    level2.allow("player", Operation.WRITE)
-    leaf.allow("player", Operation.EXECUTE)
+    // Настраиваем права через сервис
+    val aclService = AccessControlService()
+    aclService.grant(level1, "player", Operation.READ)
+    aclService.grant(level2, "player", Operation.WRITE)
+    aclService.grant(leaf, "player", Operation.EXECUTE)
 
     val requestedOp = when (actionValue.lowercase()) {
         "read" -> Operation.READ
@@ -172,7 +121,7 @@ fun main(args: Array<String>) {
 
     val target = root.locate(resourceValue) ?: exitProcess(6)
 
-    if (!target.permitted(loginValue, requestedOp)) {
+    if (!aclService.isPermitted(target, loginValue, requestedOp)) {
         exitProcess(5)
     }
 
@@ -181,11 +130,4 @@ fun main(args: Array<String>) {
     }
 
     exitProcess(0)
-}
-
-fun computeHash(input: String, salt: String): String {
-    val algorithm = MessageDigest.getInstance("SHA-256")
-    val data = (salt + input).toByteArray(StandardCharsets.UTF_8)
-    val digest = algorithm.digest(data)
-    return digest.joinToString("") { "%02x".format(it) }
 }
