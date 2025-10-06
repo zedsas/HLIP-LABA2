@@ -16,18 +16,6 @@ class ResourceNode(
 
     fun findChild(id: String): ResourceNode? = children[id]
 
-    fun locate(path: String): ResourceNode? {
-        if (path.isEmpty()) return null
-        val segments = path.split(".")
-        if (segments.any { !ResourceNode.isValidIdentifier(it) }) return null
-
-        var current: ResourceNode? = this
-        for (segment in segments) {
-            current = current?.findChild(segment) ?: return null
-        }
-        return current
-    }
-
     companion object {
         fun isValidIdentifier(name: String): Boolean {
             if (name.isEmpty() || name.length > 20) return false
@@ -36,7 +24,6 @@ class ResourceNode(
     }
 }
 
-// Управление правами для одного узла
 class AccessControlList {
     private val rules = mutableMapOf<String, MutableSet<Operation>>()
 
@@ -49,7 +36,6 @@ class AccessControlList {
     }
 }
 
-// Сервис проверки доступа с учётом иерархии
 class AccessControlService {
     private val nodeAcls = mutableMapOf<ResourceNode, AccessControlList>()
 
@@ -67,6 +53,20 @@ class AccessControlService {
             current = current.parent
         }
         return false
+    }
+}
+
+class PathResolver {
+    fun resolveFrom(start: ResourceNode, path: String): ResourceNode? {
+        if (path.isEmpty()) return null
+        val segments = path.split(".")
+        if (segments.any { !ResourceNode.isValidIdentifier(it) }) return null
+
+        var current: ResourceNode = start
+        for (segment in segments) {
+            current = current.findChild(segment) ?: return null
+        }
+        return current
     }
 }
 

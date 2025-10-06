@@ -1,14 +1,14 @@
 import kotlinx.cli.*
 import kotlin.system.exitProcess
 
+data class Account(val salt: String, val hash: String)
+
 val accounts = mapOf(
     "player" to Account(
         salt = "gameSalt",
         hash = computeHash("qwerty", "gameSalt")
     )
 )
-
-data class Account(val salt: String, val hash: String)
 
 fun main(args: Array<String>) {
     val parser = ArgParser("resource-access")
@@ -96,7 +96,6 @@ fun main(args: Array<String>) {
         exitProcess(2)
     }
 
-    // Создаём дерево ресурсов
     val root = ResourceNode("system", 100)
     val level1 = ResourceNode("data", 50, root)
     val level2 = ResourceNode("logs", 20, level1)
@@ -106,7 +105,6 @@ fun main(args: Array<String>) {
     level1.addChild(level2)
     level2.addChild(leaf)
 
-    // Настраиваем права через сервис
     val aclService = AccessControlService()
     aclService.grant(level1, "player", Operation.READ)
     aclService.grant(level2, "player", Operation.WRITE)
@@ -119,7 +117,8 @@ fun main(args: Array<String>) {
         else -> exitProcess(4)
     }
 
-    val target = root.locate(resourceValue) ?: exitProcess(6)
+    val pathResolver = PathResolver()
+    val target = pathResolver.resolveFrom(root, resourceValue) ?: exitProcess(6)
 
     if (!aclService.isPermitted(target, loginValue, requestedOp)) {
         exitProcess(5)
