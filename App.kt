@@ -1,14 +1,50 @@
 import kotlinx.cli.*
 import kotlin.system.exitProcess
 
-data class Account(val salt: String, val hash: String)
-
 val accounts = mapOf(
     "player" to Account(
         salt = "gameSalt",
         hash = computeHash("qwerty", "gameSalt")
     )
 )
+
+fun printHelp() {
+    println("Система контроля доступа к ресурсам")
+    println("Использование: resource-access --login <user> --password <pass> --action <operation> --resource <path> --volume <amount>")
+    println()
+    println("Аргументы:")
+    println("  --login <user>     Идентификатор пользователя")
+    println("  --password <pass>  Секрет для аутентификации")
+    println("  --action <operation> Запрашиваемая операция: read, write, execute")
+    println("  --resource <path>  Путь к ресурсу через точки (например, A.B.C)")
+    println("  --volume <amount>  Запрашиваемый объем ресурса (целое число)")
+    println("  -h, --help        Показать эту справку")
+    println()
+    ExitCodes.printAllCodes()
+}
+
+fun createTestResourceStructure(): ResourceNode {
+    val root = ResourceNode("system", 100)
+    val level1 = ResourceNode("data", 50, root)
+    val level2 = ResourceNode("logs", 20, level1)
+    val leaf = ResourceNode("config", 10, level2)
+
+    root.addChild(level1)
+    level1.addChild(level2)
+    level2.addChild(leaf)
+
+    return root
+}
+
+fun setupTestPermissions(aclService: AccessControlService, root: ResourceNode) {
+    val level1 = root.findChild("data")!!
+    val level2 = level1.findChild("logs")!!
+    val leaf = level2.findChild("config")!!
+
+    aclService.grant(level1, "player", Operation.READ)
+    aclService.grant(level2, "player", Operation.WRITE)
+    aclService.grant(leaf, "player", Operation.EXECUTE)
+}
 
 fun main(args: Array<String>) {
     val parser = ArgParser("resource-access")
@@ -20,28 +56,8 @@ fun main(args: Array<String>) {
     val amount by parser.option(ArgType.String, fullName = "volume", description = "Запрашиваемый объем ресурса").required()
 
     if (args.isEmpty() || args.contains("-h") || args.contains("--help")) {
-        println("Система контроля доступа к ресурсам")
-        println("Использование: resource-access --login <user> --password <pass> --action <operation> --resource <path> --volume <amount>")
-        println()
-        println("Аргументы:")
-        println("  --login <user>     Идентификатор пользователя")
-        println("  --password <pass>  Секрет для аутентификации")
-        println("  --action <operation> Запрашиваемая операция: read, write, execute")
-        println("  --resource <path>  Путь к ресурсу через точки (например, A.B.C)")
-        println("  --volume <amount>  Запрашиваемый объем ресурса (целое число)")
-        println("  -h, --help        Показать эту справку")
-        println()
-        println("Коды возврата:")
-        println("  0: Успешное выполнение")
-        println("  1: Запрошена справка")
-        println("  2: Неверный пароль")
-        println("  3: Неверный логин")
-        println("  4: Неизвестное действие над ресурсом")
-        println("  5: Нет доступа")
-        println("  6: Несуществующий ресурс")
-        println("  7: Некорректный формат ресурса или объема")
-        println("  8: Превышение максимального объема")
-        exitProcess(1)
+        printHelp()
+        exitProcess(ExitCodes.HELP_REQUESTED)
     }
 
     try {
@@ -49,31 +65,11 @@ fun main(args: Array<String>) {
     } catch (e: Exception) {
         when {
             e.message?.contains("help") == true -> {
-                println("Система контроля доступа к ресурсам")
-                println("Использование: resource-access --login <user> --password <pass> --action <operation> --resource <path> --volume <amount>")
-                println()
-                println("Аргументы:")
-                println("  --login <user>     Идентификатор пользователя")
-                println("  --password <pass>  Секрет для аутентификации")
-                println("  --action <operation> Запрашиваемая операция: read, write, execute")
-                println("  --resource <path>  Путь к ресурсу через точки (например, A.B.C)")
-                println("  --volume <amount>  Запрашиваемый объем ресурса (целое число)")
-                println("  -h, --help        Показать эту справку")
-                println()
-                println("Коды возврата:")
-                println("  0: Успешное выполнение")
-                println("  1: Запрошена справка")
-                println("  2: Неверный пароль")
-                println("  3: Неверный логин")
-                println("  4: Неизвестное действие над ресурсом")
-                println("  5: Нет доступа")
-                println("  6: Несуществующий ресурс")
-                println("  7: Некорректный формат ресурса или объема")
-                println("  8: Превышение максимального объема")
-                exitProcess(1)
+                printHelp()
+                exitProcess(ExitCodes.HELP_REQUESTED)
             }
             else -> {
-                exitProcess(1)
+                exitProcess(ExitCodes.INVALID_FORMAT)
             }
         }
     }
@@ -85,48 +81,44 @@ fun main(args: Array<String>) {
     val volumeValueStr = amount
 
     if (resourceValue.split(".").any { !ResourceNode.isValidIdentifier(it) }) {
-        exitProcess(7)
+        exitProcess(ExitCodes.INVALID_FORMAT)
     }
 
-    val volumeValue = volumeValueStr.toIntOrNull() ?: exitProcess(7)
+    val volumeValue = volumeValueStr.toIntOrNull() ?: run {
+        exitProcess(ExitCodes.INVALID_FORMAT)
+    }
 
-    val account = accounts[loginValue] ?: exitProcess(3)
+    val account = accounts[loginValue] ?: run {
+        exitProcess(ExitCodes.INVALID_LOGIN)
+    }
 
     if (computeHash(passwordValue, account.salt) != account.hash) {
-        exitProcess(2)
+        exitProcess(ExitCodes.INVALID_PASSWORD)
     }
 
-    val root = ResourceNode("system", 100)
-    val level1 = ResourceNode("data", 50, root)
-    val level2 = ResourceNode("logs", 20, level1)
-    val leaf = ResourceNode("config", 10, level2)
-
-    root.addChild(level1)
-    level1.addChild(level2)
-    level2.addChild(leaf)
-
+    val root = createTestResourceStructure()
     val aclService = AccessControlService()
-    aclService.grant(level1, "player", Operation.READ)
-    aclService.grant(level2, "player", Operation.WRITE)
-    aclService.grant(leaf, "player", Operation.EXECUTE)
+    setupTestPermissions(aclService, root)
 
     val requestedOp = when (actionValue.lowercase()) {
         "read" -> Operation.READ
         "write" -> Operation.WRITE
         "execute" -> Operation.EXECUTE
-        else -> exitProcess(4)
+        else -> exitProcess(ExitCodes.UNKNOWN_OPERATION)
     }
 
     val pathResolver = PathResolver()
-    val target = pathResolver.resolveFrom(root, resourceValue) ?: exitProcess(6)
+    val target = pathResolver.resolveFrom(root, resourceValue) ?: run {
+        exitProcess(ExitCodes.RESOURCE_NOT_FOUND)
+    }
 
     if (!aclService.isPermitted(target, loginValue, requestedOp)) {
-        exitProcess(5)
+        exitProcess(ExitCodes.ACCESS_DENIED)
     }
 
     if (volumeValue > target.capacity) {
-        exitProcess(8)
+        exitProcess(ExitCodes.EXCEEDED_CAPACITY)
     }
 
-    exitProcess(0)
+    exitProcess(ExitCodes.SUCCESS)
 }

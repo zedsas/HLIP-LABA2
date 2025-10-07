@@ -3,6 +3,8 @@ import java.nio.charset.StandardCharsets
 
 enum class Operation { READ, WRITE, EXECUTE }
 
+data class Account(val salt: String, val hash: String)
+
 class ResourceNode(
     val id: String,
     val capacity: Int = 10,
