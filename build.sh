@@ -1,5 +1,6 @@
 #!/bin/bash
-kotlinc ExitCodes.kt Node.kt App.kt -cp "libs/kotlin-stdlib.jar;libs/kotlin-reflect-1.7.10.jar;libs/kotlinx-cli-jvm-0.3.6.jar" -d app.jar
+kotlinc *.kt -cp "libs/kotlin-stdlib.jar;libs/kotlin-reflect-1.7.10.jar;libs/kotlinx-cli-jvm-0.3.6.jar" -d app.jar
+
 if [ $? -eq 0 ]; then
     echo "Сборка успешна: app.jar создан"
 else
