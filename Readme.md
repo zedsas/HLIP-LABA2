@@ -1,4 +1,4 @@
-# Лабораторная работа №5 — Система контроля доступа к ресурсам
+# Лабораторная работа №6
 
 ## Авторы
 - Тусюк Александр
@@ -120,4 +120,5 @@ string password_hash
     }
     ACCOUNT ||--o{ PERMISSION : has
     RESOURCE ||--o{ PERMISSION : is_subject_of
+
     RESOURCE ||--o{ RESOURCE : parent_of
