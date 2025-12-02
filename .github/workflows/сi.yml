@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Kotlin compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kotlin
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Build JAR
+        run: ./scripts/build.sh
+
+      - name: Init DB
+        run: ./scripts/init-db.sh
+
+      - name: Run integration tests
+        run: ./scripts/test.sh
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Notify Telegram (success)
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="✅ CI прошёл успешно для $GITHUB_REPOSITORY (PR #${{ github.event.pull_request.number }})"
+
+      - name: Notify Telegram (failure)
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="❌ CI упал для $GITHUB_REPOSITORY (PR #${{ github.event.pull_request.number }})"
