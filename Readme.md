@@ -1,4 +1,4 @@
-# Лабораторная работа №7
+# Лабораторная работа №8
 
 ## Авторы
 - Тусюк Александр
@@ -37,4 +37,5 @@
 ./scripts/run.sh --login player --password qwerty --action read --resource data --volume 1
 
 ### 6) Запуск тестов
+
    - ./scripts/test.sh
